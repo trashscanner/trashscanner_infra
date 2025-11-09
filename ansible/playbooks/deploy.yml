@@ -1,0 +1,36 @@
+---
+- name: Deploy TrashScanner Infrastructure
+  hosts: trashscanner_server
+  become: yes
+  gather_facts: yes
+
+  vars_files:
+    - ../vars/secrets.yml
+
+  pre_tasks:
+    - name: Display deployment mode
+      debug:
+        msg: "Deploying in {{ deployment_mode }} mode"
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+  roles:
+    - role: docker
+      tags: [always]
+    
+    - role: postgres
+      when: deployment_mode == "postgres" or deployment_mode == "all"
+      tags: [postgres]
+    
+    - role: minio
+      when: deployment_mode == "minio" or deployment_mode == "all"
+      tags: [minio]
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg: "Infrastructure deployment completed successfully!"

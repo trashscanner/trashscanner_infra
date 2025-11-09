@@ -1,0 +1,29 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts should always use LF
+*.sh text eol=lf
+
+# Python files should always use LF
+*.py text eol=lf
+
+# YAML files
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Markdown files
+*.md text eol=lf
+
+# Jinja2 templates
+*.j2 text eol=lf
+
+# Git config files
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Documents
+*.pdf binary
+*.PNG binary
+*.png binary
+*.jpg binary
+*.jpeg binary

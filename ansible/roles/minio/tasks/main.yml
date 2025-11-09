@@ -1,0 +1,54 @@
+---
+- name: Create MinIO directory
+  file:
+    path: /opt/trashscanner/minio
+    state: directory
+    owner: "{{ server_user }}"
+    group: "{{ server_user }}"
+    mode: '0755'
+
+- name: Create docker-compose file for MinIO
+  template:
+    src: docker-compose.minio.yml.j2
+    dest: /opt/trashscanner/minio/docker-compose.yml
+    owner: "{{ server_user }}"
+    group: "{{ server_user }}"
+    mode: '0644'
+
+- name: Stop existing MinIO containers
+  community.docker.docker_compose_v2:
+    project_src: /opt/trashscanner/minio
+    state: absent
+  ignore_errors: yes
+
+- name: Start MinIO containers
+  community.docker.docker_compose_v2:
+    project_src: /opt/trashscanner/minio
+    state: present
+    pull: always
+  register: minio_output
+
+- name: Wait for MinIO to be ready
+  wait_for:
+    host: localhost
+    port: "{{ minio_port }}"
+    delay: 5
+    timeout: 60
+
+- name: Wait for MinIO Console to be ready
+  wait_for:
+    host: localhost
+    port: "{{ minio_console_port }}"
+    delay: 5
+    timeout: 60
+
+- name: Display MinIO deployment info
+  debug:
+    msg: 
+      - "MinIO deployed successfully!"
+      - "Host: {{ server_host }}"
+      - "API Port: {{ minio_port }}"
+      - "Console Port: {{ minio_console_port }}"
+      - "Bucket: {{ minio_bucket }}"
+      - "Root User: {{ minio_root_user }}"
+      - "Console URL: http://{{ server_host }}:{{ minio_console_port }}"

@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trashscanner_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: {{ postgres_user }}
+      POSTGRES_PASSWORD: {{ postgres_password }}
+      POSTGRES_DB: {{ postgres_db }}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "{{ postgres_port }}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trashscanner_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  trashscanner_network:
+    name: trashscanner_network
+    driver: bridge

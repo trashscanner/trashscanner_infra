@@ -1,0 +1,114 @@
+name: Check Infrastructure Status
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Проверка каждый день в 9:00 UTC
+    - cron: '0 9 * * *'
+
+jobs:
+  check-status:
+    name: Check Services Status
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests psycopg2-binary
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check Docker containers status
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            'docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"' > container_status.txt
+          cat container_status.txt
+          
+          echo "### Docker Containers Status 🐳" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat container_status.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Check PostgreSQL connection
+        run: |
+          python3 << EOF
+          import psycopg2
+          import sys
+          
+          try:
+              conn = psycopg2.connect(
+                  host="${{ secrets.SERVER_HOST }}",
+                  port="${{ secrets.POSTGRES_PORT }}",
+                  user="${{ secrets.POSTGRES_USER }}",
+                  password="${{ secrets.POSTGRES_PASSWORD }}",
+                  database="${{ secrets.POSTGRES_DB }}",
+                  connect_timeout=10
+              )
+              conn.close()
+              print("✅ PostgreSQL: Connection successful")
+              sys.exit(0)
+          except Exception as e:
+              print(f"❌ PostgreSQL: Connection failed - {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Check MinIO status
+        run: |
+          python3 << EOF
+          import requests
+          import sys
+          
+          try:
+              # Проверка API
+              response = requests.get(
+                  "http://${{ secrets.SERVER_HOST }}:${{ secrets.MINIO_PORT }}/minio/health/live",
+                  timeout=10
+              )
+              if response.status_code == 200:
+                  print("✅ MinIO API: Healthy")
+              else:
+                  print(f"⚠️  MinIO API: Status code {response.status_code}")
+              
+              # Проверка консоли
+              response = requests.get(
+                  "http://${{ secrets.SERVER_HOST }}:${{ secrets.MINIO_CONSOLE_PORT }}",
+                  timeout=10
+              )
+              if response.status_code in [200, 301, 302]:
+                  print("✅ MinIO Console: Accessible")
+              else:
+                  print(f"⚠️  MinIO Console: Status code {response.status_code}")
+                  
+          except Exception as e:
+              print(f"❌ MinIO: Check failed - {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Check disk usage
+        run: |
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.SERVER_HOST }} \
+            'df -h /opt/trashscanner /var/lib/docker' > disk_usage.txt || true
+          
+          echo "### Disk Usage 💾" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat disk_usage.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Final status
+        if: success()
+        run: |
+          echo "### ✅ All checks passed!" >> $GITHUB_STEP_SUMMARY
+          echo "Infrastructure is healthy and running." >> $GITHUB_STEP_SUMMARY

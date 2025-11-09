@@ -1,0 +1,45 @@
+---
+- name: Create PostgreSQL directory
+  file:
+    path: /opt/trashscanner/postgres
+    state: directory
+    owner: "{{ server_user }}"
+    group: "{{ server_user }}"
+    mode: '0755'
+
+- name: Create docker-compose file for PostgreSQL
+  template:
+    src: docker-compose.postgres.yml.j2
+    dest: /opt/trashscanner/postgres/docker-compose.yml
+    owner: "{{ server_user }}"
+    group: "{{ server_user }}"
+    mode: '0644'
+
+- name: Stop existing PostgreSQL container
+  community.docker.docker_compose_v2:
+    project_src: /opt/trashscanner/postgres
+    state: absent
+  ignore_errors: yes
+
+- name: Start PostgreSQL container
+  community.docker.docker_compose_v2:
+    project_src: /opt/trashscanner/postgres
+    state: present
+    pull: always
+  register: postgres_output
+
+- name: Wait for PostgreSQL to be ready
+  wait_for:
+    host: localhost
+    port: "{{ postgres_port }}"
+    delay: 5
+    timeout: 60
+
+- name: Display PostgreSQL deployment info
+  debug:
+    msg: 
+      - "PostgreSQL deployed successfully!"
+      - "Host: {{ server_host }}"
+      - "Port: {{ postgres_port }}"
+      - "Database: {{ postgres_db }}"
+      - "User: {{ postgres_user }}"

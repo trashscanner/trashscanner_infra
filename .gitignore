@@ -1,0 +1,38 @@
+# Ansible temporary files
+*.retry
+.vault_pass
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Ansible Galaxy
+roles/external/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets (backup - secrets should be in GitHub Actions)
+ansible/vars/secrets.yml
+.env
+
+# SSH keys
+*.pem
+*.key
+id_rsa*

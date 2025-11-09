@@ -7,6 +7,27 @@
     group: "{{ server_user }}"
     mode: '0755'
 
+- name: Stop existing PostgreSQL container
+  community.docker.docker_compose_v2:
+    project_src: /opt/trashscanner/postgres
+    state: absent
+    remove_volumes: yes
+  ignore_errors: yes
+
+- name: Remove PostgreSQL data directory
+  file:
+    path: /opt/trashscanner/postgres
+    state: absent
+  ignore_errors: yes
+
+- name: Recreate PostgreSQL directory
+  file:
+    path: /opt/trashscanner/postgres
+    state: directory
+    owner: "{{ server_user }}"
+    group: "{{ server_user }}"
+    mode: '0755'
+
 - name: Create docker-compose file for PostgreSQL
   template:
     src: docker-compose.postgres.yml.j2
@@ -14,12 +35,6 @@
     owner: "{{ server_user }}"
     group: "{{ server_user }}"
     mode: '0644'
-
-- name: Stop existing PostgreSQL container
-  community.docker.docker_compose_v2:
-    project_src: /opt/trashscanner/postgres
-    state: absent
-  ignore_errors: yes
 
 - name: Start PostgreSQL container
   community.docker.docker_compose_v2:

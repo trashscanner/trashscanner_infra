@@ -17,6 +17,7 @@ jobs:
   deploy:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
+    environment: test
     
     steps:
       - name: Checkout repository
@@ -39,28 +40,31 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ vars.SERVER_HOST }} >> ~/.ssh/known_hosts
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
 
       - name: Create Ansible variables file
         run: |
           cat > ansible/vars/secrets.yml << EOF
-          server_host: "${{ secrets.SERVER_HOST }}"
-          server_user: "deploy"
+          server_host: "${{ vars.SERVER_HOST }}"
+          server_user: "${{ vars.SERVER_USER }}"
+          ansible_become_password: "${{ secrets.ANSIBLE_BECOME_PASSWORD }}"
           
           # PostgreSQL configuration
-          postgres_user: "${{ secrets.POSTGRES_USER }}"
+          postgres_user: "${{ vars.POSTGRES_USER }}"
           postgres_password: "${{ secrets.POSTGRES_PASSWORD }}"
-          postgres_db: "${{ secrets.POSTGRES_DB }}"
-          postgres_port: "${{ secrets.POSTGRES_PORT }}"
+          postgres_db: "${{ vars.POSTGRES_DB }}"
+          postgres_port: "${{ vars.POSTGRES_PORT }}"
           
           # MinIO configuration
-          minio_root_user: "${{ secrets.MINIO_ROOT_USER }}"
+          minio_root_user: "${{ vars.MINIO_ROOT_USER }}"
           minio_root_password: "${{ secrets.MINIO_ROOT_PASSWORD }}"
-          minio_port: "${{ secrets.MINIO_PORT }}"
-          minio_console_port: "${{ secrets.MINIO_CONSOLE_PORT }}"
-          minio_bucket: "${{ secrets.MINIO_BUCKET }}"
+          minio_port: "${{ vars.MINIO_PORT }}"
+          minio_console_port: "${{ vars.MINIO_CONSOLE_PORT }}"
+          minio_bucket: "${{ vars.MINIO_BUCKET }}"
           
           # Deployment mode
           deployment_mode: "${{ github.event.inputs.mode }}"
@@ -71,6 +75,7 @@ jobs:
           cd ansible
           ansible-playbook -i inventory/hosts.yml \
             --private-key ~/.ssh/deploy_key \
+            --user "${{ vars.SERVER_USER }}" \
             --extra-vars "@vars/secrets.yml" \
             playbooks/deploy.yml
 
@@ -79,14 +84,14 @@ jobs:
           echo "### Deployment completed successfully! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Mode:** ${{ github.event.inputs.mode }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Server:** ${{ secrets.SERVER_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Server:** ${{ vars.SERVER_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ github.event.inputs.mode }}" == "postgres" ] || [ "${{ github.event.inputs.mode }}" == "all" ]; then
-            echo "✅ PostgreSQL deployed on port ${{ secrets.POSTGRES_PORT }}" >> $GITHUB_STEP_SUMMARY
+            echo "✅ PostgreSQL deployed on port ${{ vars.POSTGRES_PORT }}" >> $GITHUB_STEP_SUMMARY
           fi
           
           if [ "${{ github.event.inputs.mode }}" == "minio" ] || [ "${{ github.event.inputs.mode }}" == "all" ]; then
-            echo "✅ MinIO deployed on port ${{ secrets.MINIO_PORT }}" >> $GITHUB_STEP_SUMMARY
-            echo "✅ MinIO Console on port ${{ secrets.MINIO_CONSOLE_PORT }}" >> $GITHUB_STEP_SUMMARY
+            echo "✅ MinIO deployed on port ${{ vars.MINIO_PORT }}" >> $GITHUB_STEP_SUMMARY
+            echo "✅ MinIO Console on port ${{ vars.MINIO_CONSOLE_PORT }}" >> $GITHUB_STEP_SUMMARY
           fi

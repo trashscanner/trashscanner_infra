@@ -10,6 +10,7 @@ jobs:
   check-status:
     name: Check Services Status
     runs-on: ubuntu-latest
+    environment: test
     
     steps:
       - name: Checkout repository
@@ -27,13 +28,15 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ vars.SERVER_HOST }} >> ~/.ssh/known_hosts
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
 
       - name: Check Docker containers status
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+          ssh -i ~/.ssh/deploy_key ${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }} \
             'docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"' > container_status.txt
           cat container_status.txt
           
@@ -50,11 +53,11 @@ jobs:
           
           try:
               conn = psycopg2.connect(
-                  host="${{ secrets.SERVER_HOST }}",
-                  port="${{ secrets.POSTGRES_PORT }}",
-                  user="${{ secrets.POSTGRES_USER }}",
+                  host="${{ vars.SERVER_HOST }}",
+                  port="${{ vars.POSTGRES_PORT }}",
+                  user="${{ vars.POSTGRES_USER }}",
                   password="${{ secrets.POSTGRES_PASSWORD }}",
-                  database="${{ secrets.POSTGRES_DB }}",
+                  database="${{ vars.POSTGRES_DB }}",
                   connect_timeout=10
               )
               conn.close()
@@ -74,7 +77,7 @@ jobs:
           try:
               # Проверка API
               response = requests.get(
-                  "http://${{ secrets.SERVER_HOST }}:${{ secrets.MINIO_PORT }}/minio/health/live",
+                  "http://${{ vars.SERVER_HOST }}:${{ vars.MINIO_PORT }}/minio/health/live",
                   timeout=10
               )
               if response.status_code == 200:
@@ -84,7 +87,7 @@ jobs:
               
               # Проверка консоли
               response = requests.get(
-                  "http://${{ secrets.SERVER_HOST }}:${{ secrets.MINIO_CONSOLE_PORT }}",
+                  "http://${{ vars.SERVER_HOST }}:${{ vars.MINIO_CONSOLE_PORT }}",
                   timeout=10
               )
               if response.status_code in [200, 301, 302]:
@@ -99,7 +102,7 @@ jobs:
 
       - name: Check disk usage
         run: |
-          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.SERVER_HOST }} \
+          ssh -i ~/.ssh/deploy_key ${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }} \
             'df -h /opt/trashscanner /var/lib/docker' > disk_usage.txt || true
           
           echo "### Disk Usage 💾" >> $GITHUB_STEP_SUMMARY

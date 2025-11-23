@@ -30,9 +30,18 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 {{ minio_root_user }} {{ minio_root_password }};
-      mc mb local/{{ minio_bucket }} --ignore-existing;
-      mc anonymous set download local/{{ minio_bucket }};
+      # retry alias set until MinIO is reachable (handle slow startup)
+      tries=0
+      until mc alias set local http://minio:9000 '{{ minio_root_user }}' '{{ minio_root_password }}'; do
+        tries=$((tries + 1))
+        if [ $tries -ge 15 ]; then
+          echo 'failed to set alias for MinIO after retries' >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      mc mb local/{{ minio_bucket }} --ignore-existing || true;
+      mc anonymous set download local/{{ minio_bucket }} || true;
       echo 'MinIO bucket {{ minio_bucket }} created successfully';
       exit 0;
       "

@@ -2,9 +2,6 @@ name: Check Infrastructure Status
 
 on:
   workflow_dispatch:
-  schedule:
-    # Проверка каждый день в 9:00 UTC
-    - cron: '0 9 * * *'
 
 jobs:
   check-status:

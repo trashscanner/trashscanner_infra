@@ -5,9 +5,8 @@ services:
     image: minio/minio:latest
     container_name: trashscanner_minio
     restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: {{ minio_root_user }}
-      MINIO_ROOT_PASSWORD: {{ minio_root_password }}
+    env_file:
+      - ./minio.env
     command: server /data --console-address ":9001"
     ports:
       - "{{ minio_port }}:9000"
@@ -15,10 +14,11 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/ready || exit 1"]
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - trashscanner_network
 
@@ -26,25 +26,36 @@ services:
     image: minio/mc:latest
     container_name: trashscanner_minio_init
     depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      # retry alias set until MinIO is reachable (handle slow startup)
-      tries=0
-      until mc alias set local http://minio:9000 '{{ minio_root_user }}' '{{ minio_root_password }}'; do
-        tries=$((tries + 1))
-        if [ $tries -ge 15 ]; then
-          echo 'failed to set alias for MinIO after retries' >&2
+      - minio
+    restart: "on-failure"
+    env_file:
+      - ./minio.env
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        if [ -z "$MINIO_ROOT_USER" ] || [ -z "$MINIO_ROOT_PASSWORD" ]; then
+          echo 'MINIO_ROOT_USER and MINIO_ROOT_PASSWORD must be set' >&2
           exit 1
         fi
-        sleep 1
-      done
-      mc mb local/{{ minio_bucket }} --ignore-existing || true;
-      mc anonymous set download local/{{ minio_bucket }} || true;
-      echo 'MinIO bucket {{ minio_bucket }} created successfully';
-      exit 0;
-      "
+        # retry alias set until MinIO is reachable (handle slow startup)
+        tries=0
+        until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+          tries=$(( ${tries:-0} + 1 ))
+          if [ "${tries:-0}" -ge 60 ]; then
+            echo 'failed to set alias for MinIO after retries' >&2
+            exit 1
+          fi
+          sleep 1
+        done
+        mc admin info local >/dev/null 2>&1 || {
+          echo 'MinIO credentials are not admin; check MINIO_ROOT_USER/MINIO_ROOT_PASSWORD' >&2
+          exit 1
+        }
+        mc mb --ignore-existing local/{{ minio_bucket }}
+        mc anonymous set download local/{{ minio_bucket }}
+        echo 'MinIO bucket {{ minio_bucket }} created successfully'
     networks:
       - trashscanner_network
 

@@ -57,6 +57,12 @@
     delay: 5
     timeout: 60
 
+- name: Wait for minio-init to complete and verify status
+  command: docker wait trashscanner_minio_init
+  register: minio_init_wait
+  failed_when: minio_init_wait.stdout | trim != '0'
+  changed_when: false
+
 - name: Display MinIO deployment info
   debug:
     msg: 

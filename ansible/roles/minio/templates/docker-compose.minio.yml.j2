@@ -28,7 +28,7 @@ services:
     container_name: trashscanner_minio_init
     depends_on:
       - minio
-    restart: "on-failure"
+    restart: "no"
     environment:
       MINIO_ROOT_USER: '{{ minio_root_user }}'
       MINIO_ROOT_PASSWORD: '{{ minio_root_password }}'
@@ -37,15 +37,15 @@ services:
       - -c
       - |
         set -e
-        if [ -z "$MINIO_ROOT_USER" ] || [ -z "$MINIO_ROOT_PASSWORD" ]; then
+        if [ -z "$$MINIO_ROOT_USER" ] || [ -z "$$MINIO_ROOT_PASSWORD" ]; then
           echo 'MINIO_ROOT_USER and MINIO_ROOT_PASSWORD must be set' >&2
           exit 1
         fi
         # retry alias set until MinIO is reachable (handle slow startup)
         tries=0
-        until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
-          tries=$(( ${tries:-0} + 1 ))
-          if [ "${tries:-0}" -ge 60 ]; then
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          tries=$$(( $${tries:-0} + 1 ))
+          if [ "$${tries:-0}" -ge 60 ]; then
             echo 'failed to set alias for MinIO after retries' >&2
             exit 1
           fi
